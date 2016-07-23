@@ -1,4 +1,5 @@
 {
+    "name": "bnkr/simpliform",
     "require-dev": {
         "phpunit/phpunit": "^5.4"
     }

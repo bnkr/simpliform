@@ -187,6 +187,18 @@ class FormTest extends TestCase
         $this->assertEquals('2', $data['other_data']);
     }
 
+    public function testValidFormCanBeManuallyInavlidated()
+    {
+        $fornm = new Form();
+        $form->add('name', 'text');
+        $form->setData(array("name" => "blah"));
+        $this->assertEquals(true, $form->isValid());
+
+        $form->addMessage('fieldset.other', "It's invalid.");
+
+        $this->assertEquals(false, $form->isValid());
+    }
+
     public function testDefaultRenderingShowsHtml()
     {
         $this->fail("ni");

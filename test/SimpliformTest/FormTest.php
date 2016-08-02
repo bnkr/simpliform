@@ -12,7 +12,7 @@ class FormTest extends TestCase
     {
         $form = new Form();
         $form->addValidation('field', function($value, $context) {
-            return $value == 'thing';
+            return $value == 'good-value';
         });
         $form->addPreparation(function($form) {
             if ($form->getData()['validate']) {
@@ -23,22 +23,22 @@ class FormTest extends TestCase
 
         $form->setData(array(
             'validate' => '1',
-            'field' => "thing",
+            'field' => "bad-value",
         ));
         $this->assertEquals(false, $form->isValid());
 
         $form->setData(array(
             'validate' => '0',
-            'field' => "thing",
+            'field' => "bad-value",
         ));
         $this->assertEquals(true, $form->isValid());
     }
 
-    public function testWholeFormValidationRuns()
+    public function testSimpleValidation()
     {
         $form = new Form();
-        $form->addValidation(function($form) {
-            $data = $form->getData();
+        $form->addValidation('field', function($value, $form) {
+            $data = $form->getRawData();
             return $data['field'] == "1";
         });
         $form->setData(array('field' => 1));
@@ -50,7 +50,7 @@ class FormTest extends TestCase
     public function testDependentValidationTriggersOtherValidation()
     {
         $form = new Form();
-        $form->addProcessing('other', function($value, $context) {
+        $form->addProcessing('other', function($context) {
             $context->fail("invalid");
         });
         $form->addValidation('whatever', function($value, $context) {
@@ -60,8 +60,8 @@ class FormTest extends TestCase
         });
         $form->setData(array('other' => 'x', 'whatever' => "10"));
         $this->assertEquals(true, $form->isValid());
-        $this->assertEquals(false, $form->getErrors()->isValid('whatever'));
-        $this->assertEquals(false, $form->getErrors()->isValid('other'));
+        $this->assertEquals(false, $form->getErrors()->get('whatever')->isValid());
+        $this->assertEquals(false, $form->getErrors()->get("other")->isValid());
     }
 
     public function testDependentValidationUsesOtherProcessing()

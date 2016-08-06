@@ -62,7 +62,6 @@ class FormTest extends TestCase
 
         $fl = $form->getMessages()->toFlatList();
         $this->assertTrue(is_string($fl['other'][0]));
-        // var_dump( $fl['other'][0]);
 
         $this->assertEquals(false, $form->isValid());
         $this->assertEquals(array('other' => null, 'whatever' => null), $form->getOutput());
@@ -161,6 +160,11 @@ class FormTest extends TestCase
             ),
         );
         $this->fail("ni");
+    }
+
+    public function testLoadFieldsInStates()
+    {
+        $this->fail("test each state a field can be in on calling load().");
     }
 
     public function testDataIsFilteredByFields()

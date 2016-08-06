@@ -184,6 +184,7 @@ class Form
 
     const DONE_STATE = 1;
     const INVALID_STATE = 2;
+    const SKIP_STATE = 3;
 
     /**
      * Cause a field to be evaluated.  This is mainly public so it can be used
@@ -200,6 +201,10 @@ class Form
                 $this->_loadStack[] = $field;
                 $stack = implode(" -> ", $this->_loadStack);
                 throw new ValidationException("dependent field is invalid: $stack");
+            } else if ($state == self::SKIP_STATE) {
+                $this->_loadStack[] = $field;
+                $stack = implode(" -> ", $this->_loadStack);
+                throw new ValidationException("cannot use skipped field: $stack");
             } else {
                 throw new \Exception("unpossible state");
             }
@@ -215,19 +220,9 @@ class Form
         $event = new ProcessingEvent();
         $event->_name = $field;
 
-        // TODO:
-        //   If a processor is loading this field manially then it might not
-        //   know that a null means the field was disabled.  It might be better
-        //   to raise an error and then mark the field fisabled in a separate
-        //   map.
-        //
-        //   Also we could do this as some kind of topological staging and just
-        //   put the disables as the first stage, then you don't need a special
-        //   type of processing.
         foreach ($this->_disables as $trigger) {
             if ($trigger->matches($event)) {
-                // TODO: this is not well tested.
-                $this->_state[$field] = self::DONE_STATE;
+                $this->_state[$field] = self::SKIP_STATE;
                 $this->_processed[$field] = null;
                 return null;
             }
@@ -235,6 +230,7 @@ class Form
 
         $value = isset($this->_data[$field]) ? $this->_data[$field] : null;
 
+        $errors = null;
         foreach ($this->_processing as $processing) {
             list($trigger, $process) = $processing;
 
@@ -243,31 +239,34 @@ class Form
                 $context->_value = $value;
                 $context->_form = $this;
 
+                $ex = null;
                 try {
                     $processed = $process->execute($context);
                 } catch (ValidationException $ex) {
-                    $this->_messages->add($event->getFieldName(), $ex);
                     $processed = null;
                 }
 
-                $processed = $this->toProcessedData($processed);
+                list($value, $errors) = $this->toProcessedData($processed, $ex);
 
-                foreach ($processed->errors as $error) {
+                // TODO:
+                //   Handle cases where the errors should not cause processing
+                //   to stop.
+                foreach ($errors as $error) {
                     $this->_messages->add($event->getFieldName(), $error);
                 }
 
-                $value = $processed->value;
-
-                if (! $this->_messages->get($event->getFieldName())->isValid()) {
+                if (! $errors) {
                     break;
                 }
             }
         }
 
-        if ($this->_messages->get($event->getFieldName())->isValid()) {
-            $this->_state[$field] = self::DONE_STATE;
-        } else {
+        // TODO:
+        //   Processors could cause other states to happen.
+        if ($errors) {
             $this->_state[$field] = self::INVALID_STATE;
+        } else {
+            $this->_state[$field] = self::DONE_STATE;
         }
 
         $this->_processed[$field] = $value;
@@ -306,14 +305,32 @@ class Form
         }
     }
 
-    static private function toProcessedData($value)
+    /**
+     * Interpret the return value (or exception) of a processor.
+     */
+    static private function toProcessedData($value, $ex)
     {
         if ($value instanceof ProcessedData) {
-            return $value;
+            $processed = $value;
+        } else {
+            $processed = new ProcessedData($value);
         }
 
-        $processed = new ProcessedData($value);
-        return $processed;
+        if ($ex) {
+            $errors[] = $ex;
+        }
+
+        foreach ($processed->errors as $error) {
+            $errors[] = $error;
+        }
+
+        if ($errors) {
+            $value = null;
+        } else {
+            $value = $processed->value;
+        }
+
+        return array($value, $errors);
     }
 
     static private function throwTypeError($value)

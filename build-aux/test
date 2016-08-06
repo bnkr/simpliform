@@ -1,4 +1,4 @@
 #!/bin/bash
 root=$(dirname "$BASH_SOURCE")/..
 cd "$root/test"
-exec ../vendor/bin/phpunit --bootstrap bootstrap.php .
+exec ../vendor/bin/phpunit --bootstrap bootstrap.php "$@" .

@@ -8,6 +8,7 @@ class Form
 {
     private $_hasProcessed = false;
     private $_data = null;
+    private $_fields = array();
     private $_processed = null;
     private $_isValid = false;
     private $_preparation = array();
@@ -45,6 +46,21 @@ class Form
     public function getData()
     {
         return $this->_data;
+    }
+
+    /**
+     * Specify that a field exists.  By default the keys of the data array will
+     * be used.
+     */
+    public function addField($name, $object = null) {
+        $this->_fields[$name] = $object;
+        $trigger = new CallableTrigger(function($event) use($name) {
+            return $name == $event->getFieldName();
+        });
+
+        // TODO:
+        //   If we do this then the field cannot be removed.
+        $this->addProcessing($trigger, new FieldProcessing($object));
     }
 
     /**
@@ -104,6 +120,8 @@ class Form
     {
         // 'valid', 'innvalid', 'not-processed',
         // can we allow an arbitrary state?
+        // would also be useful to have states in the message, w ewould only ned
+        // to know about the invalid one.
     }
 
     /**
@@ -148,9 +166,12 @@ class Form
         //
         //   additionally, if we could make groups include their own processing
         //   that would make it easier to re-use things.
-        foreach ($this->_data as $key => $value) {
+        //
+        //
+        //   Interestingly this works OK without us ever adding any fields.
+        foreach ($this->getFieldNames() as $field) {
             $this->_loadStack = array();
-            $this->load($key);
+            $this->load($field);
         }
     }
 
@@ -180,6 +201,9 @@ class Form
         //   might not know that a null means the field was disabled.  It might
         //   be better to raise an error and then mark the field fisabled in a
         //   separate map.
+        //
+        //   Also we could do this as some kind of topological staging and just
+        //   put the disables as the first stage.
         foreach ($this->_disables as $trigger) {
             if ($trigger->matches($event)) {
                 return null;
@@ -188,6 +212,7 @@ class Form
 
         $this->_messages = new Messages();
         $value = $this->_data[$field];
+
         foreach ($this->_processing as $processing) {
             list($trigger, $process) = $processing;
 
@@ -204,6 +229,8 @@ class Form
                     break;
                 }
 
+                $processed = $this->toProcessedData($processed);
+
                 foreach ($processed->errors as $error) {
                     $this->_isValid = false;
                     $this->_messages->add($event->getFieldName(), $error);
@@ -217,13 +244,28 @@ class Form
         return $value;
     }
 
+    private function getFieldNames()
+    {
+        if ($this->_fields) {
+            return array_keys($this->_fields);
+        } else {
+            // TODO:
+            //   this is probably not a good idea bceayse the client controls
+            //   these values, also it might cause some problems as far as field
+            //   groups go.
+            return array_keys($this->_data);
+        }
+    }
+
     // TODO:
     //   this needs testing, should probably be a factory somewhere so we can
     //   unit it (though w do need to care about the behaviour of optional
     //   parameters).
     static private function toTrigger($trigger)
     {
-        if (is_string($trigger)) {
+        if ($trigger instanceof TriggerInterface) {
+            return $trigger;
+        } else if (is_string($trigger)) {
             return new CallableTrigger(function($event) use($trigger) {
                 return $event->getFieldName() == $trigger;
             });
@@ -232,6 +274,16 @@ class Form
         } else {
             self::throwTypeError($trigger);
         }
+    }
+
+    static private function toProcessedData($value)
+    {
+        if ($value instanceof ProcessedData) {
+            return $value;
+        }
+
+        $processed = new ProcessedData($value);
+        return $processed;
     }
 
     static private function throwTypeError($value)
@@ -245,12 +297,12 @@ class Form
 
     static private function toProcessing($param)
     {
-        if (is_callable($param)) {
-            return new CallableProcessing($param);
-        } else if ($param instanceof ProcessingInterface) {
+        if ($param instanceof ProcessingInterface) {
             return $param;
+        } else if (is_callable($param)) {
+            return new CallableProcessing($param);
         } else {
-            self::throwTypeError($trigger);
+            self::throwTypeError($param);
         }
     }
 

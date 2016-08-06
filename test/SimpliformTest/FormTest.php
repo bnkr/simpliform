@@ -82,6 +82,27 @@ class FormTest extends TestCase
 
     public function testErrorFromFieldIsValidationFailure()
     {
+        $field = new Field\GenericField();
+        $field->addProcessing(function($context) {
+            $context->fail("some error");
+        });
+
+        $form = new Form();
+        $form->addField('whatever', $field);
+
+        $form->setData(array('whatever' => "100"));
+        $this->assertEquals(array('whatever' => array('some error')), $form->getMessages()->toFlatList());
+        $this->assertEquals(false, $form->isValid());
+        $this->assertEquals('some error', $form->getMessages()->get('whatever')->getMessages());
+    }
+
+    public function testProcessingIsOrderedByStage()
+    {
+        // Currently field processing is in the main list of processng, but it
+        // almost certainly should be first in the list.  We therefore need to
+        // be able to order the processing.  I guess triggers should be
+        // responsible for knowing the stage?  But we should be able to order it
+        // just in case.
         $this->fail("ni");
     }
 

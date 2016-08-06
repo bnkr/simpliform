@@ -2,253 +2,6 @@
 namespace Simpliform;
 
 /**
- * Processing events happen when matched to this trigger.
- */
-interface TriggerInterface
-{
-    /**
-     * Return true if an associated processing object should execute.
-     */
-    public function matches($event);
-}
-
-/**
- * Validation and processing logic.
- */
-interface ProcessingInterface
-{
-    /**
-     * Run changes and return a ProcessedData object which gives the value(s)
-     * and a list of errors.
-     *
-     * TODO
-     *   How do we implement multiple values being returned?
-     *
-     *   How do we implement warnings?
-     */
-    public function execute($context);
-}
-
-/**
- * A validator is a processor which makes no changes to the data, instead it
- * checks the validitiy.
- */
-interface ValidationInterface
-{
-    /**
-     * Checks the value in the given context.  Returns a list of errors or a
-     * true value when it's valid or raises a validation error.
-     */
-    public function validate($value, $context);
-}
-
-class ProcessedData
-{
-    public $value = null;
-    public $errors = array();
-}
-
-
-/**
- * Adapts a callable to the trigger interface.
- */
-class CallableTrigger
-{
-    public function __construct($callable)
-    {
-       $this->_callable = $callable;
-    }
-
-    public function matches($event)
-    {
-        return (bool) call_user_func($this->_callable, $event);
-    }
-}
-
-/**
- * Adapts a callable to the processing interface.
- */
-class CallableProcessing
-{
-    public function __construct($callable)
-    {
-       $this->_callable = $callable;
-    }
-
-    public function execute($context)
-    {
-        return (bool) call_user_func($this->_callable, $context);
-    }
-}
-
-/**
- * Adapts a callable to the validation interface.
- */
-class CallableValidation implements ValidationInterface
-{
-    public function __construct($callable)
-    {
-       $this->_callable = $callable;
-    }
-
-    public function validate($value, $context)
-    {
-        return (bool) call_user_func($this->_callable, $value, $context);
-    }
-}
-
-
-/**
- * Raised by processors to indicate invalid data.
- */
-class ValidationException extends \Exception
-{
-}
-
-class ErrorMessages
-{
-    public function __construct($field, $messages)
-    {
-        $this->field = $field;
-        $this->messages = $messages;
-    }
-
-    public function isValid()
-    {
-        return (bool) $this->messages;
-    }
-}
-
-/**
- * Information about messages on each field.
- *
- * TODO:
- *   "error" is a wrong name if we allow warning states
- */
-class Errors
-{
-    private $_errors = array();
-
-    public function add($field, $error)
-    {
-        $this->_errors[$field][] = $error;
-    }
-
-    public function get($field)
-    {
-        if (isset($this->_errors[$field])) {
-            return new ErrorMessages($field, $this->_errors[$field]);
-        } else {
-            return new ErrorMessages($field, array());
-        }
-    }
-
-    public function isValid()
-    {
-        return (bool) $this->_errors;
-    }
-
-}
-
-/**
- * Data at the time processing is being done.  This is cwjust a convenient way
- * to send lots of data to the processor without having billions of parameters.
- */
-class ProcessingContext
-{
-    public function getValue()
-    {
-        return $this->_value;
-    }
-
-    public function getRawData()
-    {
-        return $this->getForm()->getData();
-    }
-
-    public function getForm()
-    {
-        return $this->_form;
-    }
-
-    public function get($field)
-    {
-        return $this->getForm()->load($field);
-    }
-
-    public function fail($error)
-    {
-        throw new ValidationException($error);
-    }
-}
-
-
-/**
- * Identifies where we are in the processing process.  Processing objects will
- * match this event to decide whether they need to run or not.
- */
-class ProcessingEvent
-{
-    public function getFieldName()
-    {
-        return $this->_name;
-    }
-}
-
-/**
- * Takes an object which validates the field in context but applies no change to
- * the value given.  This is run as a processor.
- */
-class ValidationProcessing implements ProcessingInterface
-{
-    public function __construct($validation)
-    {
-        $this->validation = $validation;
-    }
-
-    public function execute($context)
-    {
-        $data = new ProcessedData();
-        $value = $context->getValue();
-        $data->value = $value;
-
-        // TODO:
-        //   This is messy.  If we're using the "fail" method then a null return
-        //   value just means no exception was raised.  We shouldn't really have
-        //   to do both ...
-        $errors = $this->validation->validate($value, $context);
-
-        if (! is_array($errors) && ! $errors) {
-            $errors = array("Validation returned false.");
-        } else if (! is_array($errors) && $errors) {
-            $errors = array();
-        }
-
-        foreach (($errors ?: array()) as $error) {
-            $data->errors[] = $error;
-        }
-
-        return $data;
-    }
-}
-
-/**
- * Wraps a callable for a post-data configuration process.
- */
-class CallablePreparation
-{
-    public function __construct($preparation)
-    {
-        $this->_preparation = $preparation;
-    }
-
-    public function execute($form)
-    {
-        call_user_func($this->_preparation, $form);
-    }
-}
-
-/**
  * Main class for defining forms.
  */
 class Form
@@ -270,10 +23,20 @@ class Form
      */
     public function setData($data)
     {
+        $this->reset();
+        $this->_data = $data;
+    }
+
+    /**
+     * Sometimes it can be convenient to re-use a form, or at leat wipe it so
+     * you can show it as new.
+     */
+    public function reset()
+    {
         $this->_processed = null;
         $this->_isValid = false;
         $this->_hasProcessed = false;
-        $this->_data = $data;
+        $this->_data = null;
     }
 
     /**
@@ -354,12 +117,12 @@ class Form
     }
 
     /**
-     * Return errors mapped from fields.
+     * Return nessages mapped from fields.
      */
-    public function getErrors()
+    public function getMessages()
     {
         $this->process();
-        return $this->_errors;
+        return $this->_messages;
     }
 
     /**
@@ -423,7 +186,7 @@ class Form
             }
         }
 
-        $this->_errors = new Errors();
+        $this->_messages = new Messages();
         $value = $this->_data[$field];
         foreach ($this->_processing as $processing) {
             list($trigger, $process) = $processing;
@@ -436,14 +199,14 @@ class Form
                 try {
                     $processed = $process->execute($context);
                 } catch (ValidationException $ex) {
-                    $this->_errors->add($event->getFieldName(), $ex);
+                    $this->_messages->add($event->getFieldName(), $ex);
                     $value = null;
                     break;
                 }
 
                 foreach ($processed->errors as $error) {
                     $this->_isValid = false;
-                    $this->_errors->add($event->getFieldName(), $error);
+                    $this->_messages->add($event->getFieldName(), $error);
                 }
 
                 $value = $processed->value;

@@ -60,15 +60,15 @@ class FormTest extends TestCase
         });
         $form->setData(array('other' => 'x', 'whatever' => "10"));
         $this->assertEquals(true, $form->isValid());
-        $this->assertEquals(false, $form->getErrors()->get('whatever')->isValid());
-        $this->assertEquals(false, $form->getErrors()->get("other")->isValid());
+        $this->assertEquals(false, $form->getMessages()->get('whatever')->isValid());
+        $this->assertEquals(false, $form->getMessages()->get("other")->isValid());
     }
 
     public function testDependentValidationUsesOtherProcessing()
     {
         $form = new Form();
-        $form->addProcessing('other', function($value, $context) {
-            return $value * 10;
+        $form->addProcessing('other', function($context) {
+            return $context->getValue() * 10;
         });
         $form->addValidation('whatever', function($value, $context) {
             return $context->get('other') == 100;
@@ -76,8 +76,8 @@ class FormTest extends TestCase
 
         $form->setData(array('other' => '10', 'whatever' => "100"));
         $this->assertEquals(true, $form->isValid());
-        $this->assertEquals(false, $form->getErrors()->isValid('whatever'));
-        $this->assertEquals(false, $form->getErrors()->isValid('other'));
+        $this->assertEquals(false, $form->getMessages()->isValid('whatever'));
+        $this->assertEquals(false, $form->getMessages()->isValid('other'));
     }
 
     public function testErrorFromFieldIsValidationFailure()

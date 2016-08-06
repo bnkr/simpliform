@@ -13,8 +13,18 @@ class FieldMessages
         $this->_messages = $messages;
     }
 
+    public function getMessages()
+    {
+        return $this->_messages;
+    }
+
+    public function add($message)
+    {
+        $this->_messages[] = $message;
+    }
+
     public function isValid()
     {
-        return (bool) $this->_messages;
+        return ! $this->_messages;
     }
 }

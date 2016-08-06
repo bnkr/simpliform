@@ -6,7 +6,11 @@ namespace Simpliform;
  */
 class Messages
 {
-    private $_messages = array();
+    // private $_messages = array();
+    public function __construct()
+    {
+        $this->_messages = array();
+    }
 
     /**
      * Return a list of field => [message, ...].  Useful developer readable
@@ -22,9 +26,9 @@ class Messages
             }
 
             // TODO: needs test if we do this kind of thing
-            foreach ($messages as $message) {
+            foreach ($messages->getMessages() as $message) {
                 if ($message instanceof ValidationException) {
-                    $message = $message->getMessage();
+                    $message = substr($message->getMessage(), 0, 256);
                 }
                 $list[$field][] = $message;
             }
@@ -32,24 +36,45 @@ class Messages
         return $list;
     }
 
+    /**
+     * Mark the field as having a given error.
+     *
+     * TODO:
+     *   We will need to allow more data about why an error happened, e.g. which
+     *   processing caused the error would be nice.  In this case we could
+     *   receive the processing context instead of the field name?
+     */
     public function add($field, $error)
     {
-        $this->_messages[$field][] = $error;
+        if (! isset($this->_messages[$field])) {
+            $this->_messages[$field] = new FieldMessages($field, array());
+        }
+
+        $this->_messages[$field]->add($error);
     }
 
     public function get($field)
     {
         if (isset($this->_messages[$field])) {
-            return new FieldMessages($field, $this->_messages[$field]);
+            return $this->_messages[$field];
         } else {
             return new FieldMessages($field, array());
         }
     }
 
-    // TODO: isValid could be a state, so we can have ERROR vs WARNING state for
-    // eample.
+    /**
+     * True if any messages were reported.
+     */
+    public function isEmpty()
+    {
+        return ! $this->_messages;
+    }
+
+    /**
+     * True if any validation failure messages were reported.
+     */
     public function isValid()
     {
-        return (bool) $this->_messages;
+        return $this->isEmpty();
     }
 }

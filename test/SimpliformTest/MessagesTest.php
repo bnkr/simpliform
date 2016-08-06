@@ -16,11 +16,31 @@ class MessagesTest extends TestCase
         $this->assertEquals(array(), $messages->toFlatList());
     }
 
-    public function testMessagesFlattenedAndPretified()
+    public function testErrorTextStored()
     {
-        // check validationException is convered properly
-        // and any other magical values of an erro (e.g. warning, failure type)
-        // should be visible in the output
-        $this->fail("ni");
+        $messages = new Messages();
+        $messages->add('field', "plain ole text");
+        $this->assertEquals(false, $messages->isValid());
+        $this->assertEquals(false, $messages->isEmpty());
+        $this->assertEquals(array('field' => array('plain ole text')), $messages->toFlatList());
+    }
+
+    public function testMultipleErrorsStored()
+    {
+        $messages = new Messages();
+        $messages->add('field', "plain ole text");
+        $messages->add('field', "more ole text");
+        $this->assertEquals(false, $messages->isValid());
+        $this->assertEquals(false, $messages->isEmpty());
+        $this->assertEquals(array('field' => array('plain ole text', 'more ole text')), $messages->toFlatList());
+    }
+
+    public function testValidaationErrorStored()
+    {
+        $messages = new Messages();
+        $messages->add('field', new \Simpliform\ValidationException("plain ole text"));
+        $this->assertEquals(false, $messages->isValid());
+        $this->assertEquals(false, $messages->isEmpty());
+        $this->assertEquals(array('field' => array('plain ole text')), $messages->toFlatList());
     }
 }

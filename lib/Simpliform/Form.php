@@ -6,11 +6,11 @@ namespace Simpliform;
  */
 class Form
 {
-    private $_hasProcessed = false;
     private $_data = null;
     private $_fields = array();
+    private $_messages = null;
     private $_processed = null;
-    private $_isValid = false;
+    private $_state = null;
     private $_preparation = array();
     private $_processing = array();
     private $_disables = array();
@@ -34,18 +34,25 @@ class Form
      */
     public function reset()
     {
-        $this->_processed = null;
-        $this->_isValid = false;
-        $this->_hasProcessed = false;
         $this->_data = null;
+        $this->_processed = null;
     }
 
     /**
-     * Return the current data.
+     * Return the input data.
      */
     public function getData()
     {
         return $this->_data;
+    }
+
+    /**
+     * Return the processed data.
+     */
+    public function getOutput()
+    {
+        $this->process();
+        return $this->_processed;
     }
 
     /**
@@ -130,8 +137,7 @@ class Form
      */
     public function isValid()
     {
-        $this->process();
-        return $this->_isValid;
+        return $this->getMessages()->isValid();
     }
 
     /**
@@ -149,7 +155,7 @@ class Form
      */
     private function process()
     {
-        if ($this->_hasProcessed) {
+        if ($this->_processed !== null) {
             return;
         }
 
@@ -158,7 +164,8 @@ class Form
         }
 
         $this->_processed = array();
-        $this->_isValid = true;
+        $this->_messages = new Messages();
+        $this->_state = array();
 
         // TODO:
         //   a sequence like this won't work for subgroups or lists (obviously)
@@ -175,16 +182,29 @@ class Form
         }
     }
 
+    const DONE_STATE = 1;
+    const INVALID_STATE = 2;
+
     /**
-     * Cause a field to be evaluated.
+     * Cause a field to be evaluated.  This is mainly public so it can be used
+     * from inside processing.
      */
     public function load($field)
     {
-        if (array_key_exists($field, $this->_processed)) {
-            return $this->_processed[$field];
+        // We could be loading this field from within another processor.
+        if (isset($this->_state[$field])) {
+            $state = $this->_state[$field];
+            if ($state == self::DONE_STATE) {
+                return $this->_processed[$field];
+            } else if ($state == self::INVALID_STATE) {
+                $this->_loadStack[] = $field;
+                $stack = implode(" -> ", $this->_loadStack);
+                throw new ValidationException("dependent field is invalid: $stack");
+            } else {
+                throw new \Exception("unpossible state");
+            }
         }
 
-        // TODO: needs unit testing (or did I already cover this?)
         if (in_array($field, $this->_loadStack)) {
             $this->_loadStack[] = $field;
             throw new \Exception("circular dependency: " . implode(" -> ", $this->_loadStack));
@@ -196,22 +216,24 @@ class Form
         $event->_name = $field;
 
         // TODO:
-        //   If we do this then we can repeatedly try to load this field.
-        //   Additionally if a processor is loading this field manially then it
-        //   might not know that a null means the field was disabled.  It might
-        //   be better to raise an error and then mark the field fisabled in a
-        //   separate map.
+        //   If a processor is loading this field manially then it might not
+        //   know that a null means the field was disabled.  It might be better
+        //   to raise an error and then mark the field fisabled in a separate
+        //   map.
         //
         //   Also we could do this as some kind of topological staging and just
-        //   put the disables as the first stage.
+        //   put the disables as the first stage, then you don't need a special
+        //   type of processing.
         foreach ($this->_disables as $trigger) {
             if ($trigger->matches($event)) {
+                // TODO: this is not well tested.
+                $this->_state[$field] = self::DONE_STATE;
+                $this->_processed[$field] = null;
                 return null;
             }
         }
 
-        $this->_messages = new Messages();
-        $value = $this->_data[$field];
+        $value = isset($this->_data[$field]) ? $this->_data[$field] : null;
 
         foreach ($this->_processing as $processing) {
             list($trigger, $process) = $processing;
@@ -225,19 +247,27 @@ class Form
                     $processed = $process->execute($context);
                 } catch (ValidationException $ex) {
                     $this->_messages->add($event->getFieldName(), $ex);
-                    $value = null;
-                    break;
+                    $processed = null;
                 }
 
                 $processed = $this->toProcessedData($processed);
 
                 foreach ($processed->errors as $error) {
-                    $this->_isValid = false;
                     $this->_messages->add($event->getFieldName(), $error);
                 }
 
                 $value = $processed->value;
+
+                if (! $this->_messages->get($event->getFieldName())->isValid()) {
+                    break;
+                }
             }
+        }
+
+        if ($this->_messages->get($event->getFieldName())->isValid()) {
+            $this->_state[$field] = self::DONE_STATE;
+        } else {
+            $this->_state[$field] = self::INVALID_STATE;
         }
 
         $this->_processed[$field] = $value;

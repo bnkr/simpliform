@@ -7,6 +7,8 @@ namespace Simpliform;
  */
 class ValidationProcessing implements ProcessingInterface
 {
+    private $_validation;
+
     public function __construct(ValidationInterface $validation)
     {
         $this->_validation = $validation;

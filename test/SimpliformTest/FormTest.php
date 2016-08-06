@@ -59,7 +59,13 @@ class FormTest extends TestCase
             return true;
         });
         $form->setData(array('other' => 'x', 'whatever' => "10"));
-        $this->assertEquals(true, $form->isValid());
+
+        $fl = $form->getMessages()->toFlatList();
+        $this->assertTrue(is_string($fl['other'][0]));
+        // var_dump( $fl['other'][0]);
+
+        $this->assertEquals(false, $form->isValid());
+        $this->assertEquals(array('other' => null, 'whatever' => null), $form->getOutput());
         $this->assertEquals(false, $form->getMessages()->get('whatever')->isValid());
         $this->assertEquals(false, $form->getMessages()->get("other")->isValid());
     }
@@ -76,8 +82,8 @@ class FormTest extends TestCase
 
         $form->setData(array('other' => '10', 'whatever' => "100"));
         $this->assertEquals(true, $form->isValid());
-        $this->assertEquals(false, $form->getMessages()->isValid('whatever'));
-        $this->assertEquals(false, $form->getMessages()->isValid('other'));
+        $this->assertEquals(false, $form->getMessages()->get('whatever')->isValid());
+        $this->assertEquals(false, $form->getMessages()->get('other')->isValid());
     }
 
     public function testErrorFromFieldIsValidationFailure()

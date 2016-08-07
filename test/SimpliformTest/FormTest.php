@@ -81,8 +81,11 @@ class FormTest extends TestCase
 
         $form->setData(array('other' => '10', 'whatever' => "100"));
         $this->assertEquals(true, $form->isValid());
-        $this->assertEquals(false, $form->getMessages()->get('whatever')->isValid());
-        $this->assertEquals(false, $form->getMessages()->get('other')->isValid());
+        $this->assertEquals(true, $form->getMessages()->get('whatever')->isValid());
+        $this->assertEquals(true, $form->getMessages()->get('other')->isValid());
+
+        $this->assertEquals(array('other' => 100, 'whatever' => "100"),
+                            $form->getOutput());
     }
 
     public function testErrorFromFieldIsValidationFailure()
@@ -98,7 +101,7 @@ class FormTest extends TestCase
         $form->setData(array('whatever' => "100"));
         $this->assertEquals(array('whatever' => array('some error')), $form->getMessages()->toFlatList());
         $this->assertEquals(false, $form->isValid());
-        $this->assertEquals('some error', $form->getMessages()->get('whatever')->getMessages());
+        $this->assertEquals('some error', $form->getMessages()->get('whatever')->getMessages()[0]->getMessage());
     }
 
     public function testProcessingIsOrderedByStage()
@@ -181,18 +184,16 @@ class FormTest extends TestCase
     public function testFieldsLoadedByName()
     {
         $form = new Form();
-        $form->addField('whatever', 'boolean', array('required' => true));
-
-        $this->assertEquals(true, $form->getField()->isRequired());
-
+        $form->addField('whatever', 'boolean');
         $form->setData(array('whatever' => '1',));
-
         $processed = $form->getOutput();
         $this->assertSame(true, $processed['whatever']);
     }
 
     public function testStatefulFieldsArePossible()
     {
+        // not exactly sure if this way will work anywya... the use case is for
+        // upload fields which transparently remember their upload though.
         $stateful = new Fixture\StatefulField();
         $stateful->setProcess(function($data) {
             if ($data['data'] == '1') {
@@ -220,12 +221,12 @@ class FormTest extends TestCase
 
     public function testValidFormCanBeManuallyInavlidated()
     {
-        $fornm = new Form();
-        $form->add('name', 'text');
+        $form = new Form();
+        $form->addValidation('name', function() { return true; });
         $form->setData(array("name" => "blah"));
         $this->assertEquals(true, $form->isValid());
 
-        $form->addMessage('fieldset.other', "It's invalid.");
+        $form->getMessages()->add('fieldset.other', "It's invalid.");
 
         $this->assertEquals(false, $form->isValid());
     }

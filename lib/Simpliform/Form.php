@@ -60,6 +60,7 @@ class Form
      * be used.
      */
     public function addField($name, $object = null) {
+        $object = $this->toField($object);
         $this->_fields[$name] = $object;
         $trigger = new CallableTrigger(function($event) use($name) {
             return $name == $event->getFieldName();
@@ -316,6 +317,7 @@ class Form
             $processed = new ProcessedData($value);
         }
 
+        $errors = array();
         if ($ex) {
             $errors[] = $ex;
         }
@@ -353,6 +355,21 @@ class Form
         }
     }
 
+    static private function toField($param)
+    {
+        if (is_string($param)) {
+            if (class_exists($class = 'Simpliform\Field\\' . ucfirst($param) . "Field")) {
+                return new $class;
+            } else {
+                throw new \Exception("can't find field: $param");
+            }
+        } else if (is_object($param)) {
+            return $param;
+        } else {
+            self::throwTypeError($param);
+        }
+    }
+
     static private function toValidation($param)
     {
         if (is_callable($param)) {
@@ -372,7 +389,6 @@ class Form
             throw new \Exception("can't");
         }
     }
-
 
     public function __call($method, $args)
     {

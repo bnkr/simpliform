@@ -111,13 +111,23 @@ class FormTest extends TestCase
         // be able to order the processing.  I guess triggers should be
         // responsible for knowing the stage?  But we should be able to order it
         // just in case.
-        $this->fail("ni");
+        $this->markTestIncomplete("not done yet");
     }
 
     public function testRequirednessIsConfigureable()
     {
-        // should be easy to enable/disable a field from being empty or not
-        $this->fail("ni");
+        $field = new Field\GenericField();
+
+        $form = new Form();
+        $form->addField('whatever', $field, array('required' => true));
+
+        $this->assertEquals(false, $form->isValid());
+
+        $form->setData(array('whatever' => ''));
+        $this->assertEquals(false, $form->isValid());
+
+        $form->setData(array('whatever' => 'a'));
+        $this->assertEquals(false, $form->isValid());
     }
 
     public function testFieldsHaveValidationFunctions()

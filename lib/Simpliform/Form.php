@@ -57,18 +57,52 @@ class Form
 
     /**
      * Specify that a field exists.  By default the keys of the data array will
-     * be used.
+     * be used.  The field object is more to do with creating a re-usable set of
+     * processing objects than doing anything itself..
      */
-    public function addField($name, $object = null) {
-        $object = $this->toField($object);
+    public function addField($name, $object = null, $options = null) {
+        $params = array();
+        if (is_string($name)) {
+            $params['name'] = $name;
+        } else if (is_array($name)) {
+            $params = $name;
+        }
+        $name = $params['name'];
+
+        if (is_object($object)) {
+            $params['object'] = $object;
+        }
+
+        if ($options) {
+            $params['options'] = $options;
+        } else if (! isset($params['options'])) {
+            $params['options'] = array();
+        }
+
+        $object = $this->toField($params['object']);
+
+        foreach ($params['options'] as $name => $value) {
+            $method = 'set' . $name;
+            if (! method_exists($object, $method)) {
+                throw new \Exception("no such option: $method");
+            }
+
+            $object->$method($value);
+        }
+
         $this->_fields[$name] = $object;
         $trigger = new CallableTrigger(function($event) use($name) {
             return $name == $event->getFieldName();
         });
 
         // TODO:
-        //   If we do this then the field cannot be removed.
-        $this->addProcessing($trigger, new FieldProcessing($object));
+        //   If we do this then the field cannot be removed and changes to the
+        //   field object will not impact the processing.  We can sort of argue
+        //   that fields are supposed to be stateless but this might be pretty
+        //   inconvenient.
+        foreach ($params['object']->_processing as $process) {
+            $this->addProcessing($trigger, $process);
+        }
     }
 
     /**
@@ -242,6 +276,11 @@ class Form
 
                 $ex = null;
                 try {
+                    // TODO:
+                    //   the processor should call setValue on the context for
+                    //   updates.  that makes it easier to do validation and so
+                    //   on.  we can have another class of processors which
+                    //   always return a value.
                     $processed = $process->execute($context);
                 } catch (ValidationException $ex) {
                     $processed = null;

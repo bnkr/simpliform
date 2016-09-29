@@ -18,7 +18,7 @@ class GenericField
             }
 
             if (empty($context->getValue())) {
-                throw new \Simpliform\ValidationError("data missing or empty");
+                throw new \Simpliform\ValidationException("data missing or empty");
             }
 
             // TODO:
